@@ -18,7 +18,7 @@ A modern Neovim plugin for enhanced mark management with a beautiful popup inter
 
 ```lua
 {
-  'your-username/marko.nvim',
+  'developedbyed/marko',
   config = function()
     require('marko').setup({
       width = 100,
@@ -34,7 +34,7 @@ A modern Neovim plugin for enhanced mark management with a beautiful popup inter
 
 ```lua
 use {
-  'your-username/marko.nvim',
+  'developedbyed/marko',
   config = function()
     require('marko').setup()
   end
@@ -44,7 +44,7 @@ use {
 ### Using [vim-plug](https://github.com/junegunn/vim-plug)
 
 ```vim
-Plug 'your-username/marko.nvim'
+Plug 'developedbyed/marko'
 ```
 
 ## 🚀 Usage
@@ -61,7 +61,7 @@ Plug 'your-username/marko.nvim'
    ```vim
    :Marko
    ```
-   Or use the default keymap: `<leader>m`
+   Or use the default keymap: `<S-">`
 
 3. **Navigate in the popup**:
    - `Enter` - Jump to mark
@@ -87,7 +87,10 @@ require('marko').setup({
   -- Popup title
   title = " Marks ",
   
-  -- Key mappings
+  -- Default keymap to open popup (set to false to disable)
+  default_keymap = '<S-">',
+  
+  -- Key mappings within popup
   keymaps = {
     delete = "d",
     goto = "<CR>",
@@ -107,12 +110,17 @@ require('marko').setup({
 ### Custom Keymaps
 
 ```lua
--- Override the default " behavior to open marks
+-- Disable default keymap and set your own
+require('marko').setup({
+  default_keymap = false,  -- Disable default <S-">
+})
+
+-- Set custom keymap
 vim.keymap.set('n', '"', function()
   require('marko').show_marks()
 end, { desc = 'Show marks popup' })
 
--- Or create your own keymap
+-- Or use leader key
 vim.keymap.set('n', '<leader>mm', function()
   require('marko').show_marks()
 end, { desc = 'Show marks popup' })

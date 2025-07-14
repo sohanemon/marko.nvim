@@ -5,6 +5,8 @@ local default_config = {
   height = 50,
   border = "rounded",
   title = " Marks ",
+  -- Default keymap to open popup (set to false to disable)
+  default_keymap = '<S-">',
   keymaps = {
     delete = "d",
     goto = "<CR>",

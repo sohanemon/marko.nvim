@@ -14,8 +14,14 @@ end, {
   desc = 'Show marks in a popup window'
 })
 
--- Optional: Create a keymap that users can override
--- This is just a default, users can remap in their config
-vim.keymap.set('n', '<leader>m', function()
-  require('marko').show_marks()
-end, { desc = 'Show marks popup' })
+-- Set up default keymap (configurable)
+vim.defer_fn(function()
+  local config = require('marko.config').get()
+  
+  -- Only set default keymap if it's not disabled
+  if config.default_keymap and config.default_keymap ~= false then
+    vim.keymap.set('n', config.default_keymap, function()
+      require('marko').show_marks()
+    end, { desc = 'Show marks popup' })
+  end
+end, 100)

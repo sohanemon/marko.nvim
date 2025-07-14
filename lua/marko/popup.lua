@@ -173,84 +173,78 @@ function M.apply_highlighting(marks)
   
   for i, mark in ipairs(marks) do
     local line_idx = i - 1
-    local col = 0
-    
-    -- Highlight mark type icon
-    vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, col, {
-      end_col = col + vim.fn.strchars(config.icons[mark.type]),
-      hl_group = "MarkoIcon"
-    })
-    col = col + vim.fn.strchars(config.icons[mark.type]) + 1
-    
-    -- Highlight first separator
-    vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, col, {
-      end_col = col + vim.fn.strchars(config.icons.separator),
-      hl_group = "MarkoSeparator"
-    })
-    col = col + vim.fn.strchars(config.icons.separator) + 1
-    
-    -- Highlight mark character
-    local mark_hl = mark.type == "global" and "MarkoGlobalMark" or "MarkoBufferMark"
-    vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, col, {
-      end_col = col + 1,
-      hl_group = mark_hl
-    })
-    col = col + 2
-    
-    -- Highlight line icon
-    vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, col, {
-      end_col = col + vim.fn.strchars(config.icons.line),
-      hl_group = "MarkoIcon"
-    })
-    col = col + vim.fn.strchars(config.icons.line) + 1
-    
-    -- Highlight line number
-    local line_num_str = string.format("%4d", mark.line)
-    vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, col, {
-      end_col = col + #line_num_str,
-      hl_group = "MarkoLineNumber"
-    })
-    col = col + #line_num_str + 1
-    
-    if mark.type == "global" then
-      -- Highlight file icon
-      vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, col, {
-        end_col = col + vim.fn.strchars(config.icons.file),
-        hl_group = "MarkoIcon"
-      })
-      col = col + vim.fn.strchars(config.icons.file) + 1
-      
-      -- Highlight filename
-      local filename = vim.fn.fnamemodify(mark.filename or "", ":t")
-      if #filename > config.columns.filename then
-        filename = filename:sub(1, config.columns.filename - 3) .. "..."
-      end
-      if #filename > 0 then
-        vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, col, {
-          end_col = col + config.columns.filename,
-          hl_group = "MarkoFilename"
-        })
-        col = col + config.columns.filename + 1
-      end
-    end
-    
-    -- Find and highlight final separator
     local line_content = vim.api.nvim_buf_get_lines(popup_buf, line_idx, line_idx + 1, false)[1]
-    if line_content then
-      local sep_pos = line_content:find(config.icons.separator .. "%s*[^" .. config.icons.separator .. "]*$")
-      if sep_pos then
-        vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, sep_pos - 1, {
-          end_col = sep_pos,
-          hl_group = "MarkoSeparator"
-        })
+    
+    if not line_content then
+      goto continue
+    end
+    
+    local line_len = #line_content
+    
+    -- Use pattern matching to find and highlight different parts
+    local patterns = {
+      -- Mark type icon at start
+      { pattern = "^[" .. config.icons.buffer .. config.icons.global .. "]", hl_group = "MarkoIcon" },
+      -- Separators
+      { pattern = config.icons.separator, hl_group = "MarkoSeparator" },
+      -- Buffer marks (lowercase letters)
+      { pattern = "%s[a-z]%s", hl_group = "MarkoBufferMark" },
+      -- Global marks (uppercase letters)  
+      { pattern = "%s[A-Z]%s", hl_group = "MarkoGlobalMark" },
+      -- Line numbers
+      { pattern = "%s%d+%s", hl_group = "MarkoLineNumber" },
+      -- File and line icons
+      { pattern = "[" .. config.icons.file .. config.icons.line .. "]", hl_group = "MarkoIcon" },
+    }
+    
+    -- Apply patterns
+    for _, p in ipairs(patterns) do
+      local start_pos = 1
+      while true do
+        local match_start, match_end = line_content:find(p.pattern, start_pos)
+        if not match_start then break end
         
-        -- Highlight content after final separator
-        vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, sep_pos + 1, {
-          end_col = -1,
-          hl_group = "MarkoContent"
-        })
+        -- Ensure we don't go out of bounds
+        match_start = math.max(1, match_start)
+        match_end = math.min(line_len, match_end)
+        
+        if match_start <= match_end and match_start <= line_len then
+          vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, match_start - 1, {
+            end_col = match_end,
+            hl_group = p.hl_group
+          })
+        end
+        
+        start_pos = match_end + 1
+        if start_pos > line_len then break end
       end
     end
+    
+    -- Highlight filename section for global marks
+    if mark.type == "global" then
+      local file_icon_pos = line_content:find(config.icons.file)
+      if file_icon_pos then
+        local filename_start = file_icon_pos + vim.fn.strchars(config.icons.file) + 1
+        local next_sep = line_content:find(config.icons.separator, filename_start)
+        if next_sep and filename_start < next_sep then
+          vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, filename_start - 1, {
+            end_col = math.min(next_sep - 1, line_len),
+            hl_group = "MarkoFilename"
+          })
+        end
+      end
+    end
+    
+    -- Highlight content after last separator
+    local last_sep = line_content:match(".*" .. config.icons.separator .. "()")
+    if last_sep and last_sep <= line_len then
+      vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, last_sep, {
+        end_col = -1,
+        hl_group = "MarkoContent"
+      })
+    end
+    
+    ::continue::
   end
 end
 

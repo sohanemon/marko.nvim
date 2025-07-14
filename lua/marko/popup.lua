@@ -117,14 +117,13 @@ function M.populate_buffer(marks)
       -- Create formatted line with proper spacing
       local line_str
       if mark.type == "global" then
-        line_str = string.format("%s %s %s %s %4d %s %-*s %s %s", 
+        line_str = string.format("%s %s %s %s %4d %s %-" .. config.columns.filename .. "s %s %s", 
           icon,
           config.icons.separator,
           mark.mark,
           config.icons.line,
           mark.line,
           config.icons.file,
-          config.columns.filename,
           filename,
           config.icons.separator,
           mark.text:sub(1, 50)

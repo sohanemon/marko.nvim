@@ -23,6 +23,16 @@ local default_config = {
   -- Separator character
   separator = "│",   -- Column separator
   
+  -- Virtual text marks configuration
+  virtual_text = {
+    enabled = true,        -- Show virtual text marks in buffers
+    icon = "●",           -- Icon to show next to mark
+    position = "eol",     -- "eol" (end of line) or "overlay"
+    format = function(mark, icon)
+      return icon .. " " .. mark
+    end
+  },
+  
   -- Column widths for better alignment
   columns = {
     icon = 3,

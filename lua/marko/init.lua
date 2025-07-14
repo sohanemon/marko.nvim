@@ -8,8 +8,14 @@ function M.setup(opts)
   -- Setup syntax highlighting for the popup filetype
   require('marko.syntax').setup_filetype()
   
-  -- Setup default keymap if enabled
+  -- Setup virtual text marks
   local config = require('marko.config').get()
+  if config.virtual_text then
+    require('marko.virtual').setup(config.virtual_text)
+    require('marko.virtual').setup_autocmds()
+  end
+  
+  -- Setup default keymap if enabled
   if config.default_keymap then
     vim.keymap.set('n', config.default_keymap, function()
       M.toggle_marks()
@@ -50,6 +56,16 @@ end
 -- Function to refresh highlights (useful for theme changes)
 function M.refresh_highlights()
   require('marko.config').refresh_highlights()
+end
+
+-- Toggle virtual text marks on/off
+function M.toggle_virtual_marks()
+  require('marko.virtual').toggle()
+end
+
+-- Refresh virtual marks in current buffer
+function M.refresh_virtual_marks()
+  require('marko.virtual').refresh_buffer_marks()
 end
 
 return M

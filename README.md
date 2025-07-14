@@ -1,4 +1,4 @@
-# Marko.nvim 🎯
+# marko.nvim 🎯
 
 A modern Neovim plugin for enhanced mark management with a beautiful popup interface.
 
@@ -19,7 +19,7 @@ A modern Neovim plugin for enhanced mark management with a beautiful popup inter
 
 ```lua
 {
-  'developedbyed/marko',
+  'developedbyed/marko.nvim',
   config = function()
     require('marko').setup({
       width = 100,
@@ -35,7 +35,7 @@ A modern Neovim plugin for enhanced mark management with a beautiful popup inter
 
 ```lua
 use {
-  'developedbyed/marko',
+  'developedbyed/marko.nvim',
   config = function()
     require('marko').setup()
   end
@@ -45,7 +45,7 @@ use {
 ### Using [vim-plug](https://github.com/junegunn/vim-plug)
 
 ```vim
-Plug 'developedbyed/marko'
+Plug 'developedbyed/marko.nvim'
 ```
 
 ## 🚀 Usage

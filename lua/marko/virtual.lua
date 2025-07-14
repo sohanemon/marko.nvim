@@ -154,78 +154,93 @@ function M.setup_mark_hooks()
   for i = string.byte('a'), string.byte('z') do
     local mark = string.char(i)
     vim.keymap.set('n', 'm' .. mark, function()
+      -- Get the actual target buffer (not popup buffer if it's open)
       local bufnr = vim.api.nvim_get_current_buf()
+      local popup = require("marko.popup")
       
-      -- Hide existing virtual mark first (in case we're moving it)
-      M.hide_mark(bufnr, mark)
+      -- If popup is open, we need to get the previous buffer
+      if popup.is_open() then
+        -- Get the buffer that was active before the popup
+        local all_bufs = vim.api.nvim_list_bufs()
+        for _, buf in ipairs(all_bufs) do
+          if vim.api.nvim_buf_is_loaded(buf) and 
+             buf ~= bufnr and 
+             vim.api.nvim_buf_get_option(buf, 'filetype') ~= 'marko-popup' and
+             vim.api.nvim_buf_get_option(buf, 'buftype') == '' then
+            bufnr = buf
+            break
+          end
+        end
+      end
       
-      -- Set the mark normally
+      -- Set the mark normally FIRST
       vim.cmd('normal! m' .. mark)
       
-      -- Show virtual text immediately
+      -- Then handle virtual text with a small delay to ensure mark is set
       vim.defer_fn(function()
+        -- Hide existing virtual mark first
+        M.hide_mark(bufnr, mark)
+        
+        -- Show new virtual text
         local pos = vim.api.nvim_buf_get_mark(bufnr, mark)
         if pos[1] > 0 then
           M.show_mark(bufnr, mark, pos[1], pos[2])
         end
-      end, 10)
+      end, 1)  -- Very small delay
     end, { desc = 'Set mark ' .. mark .. ' with virtual text' })
   end
   
-  -- Same for global marks (A-Z)
+  -- For global marks (A-Z) - use a simpler approach
   for i = string.byte('A'), string.byte('Z') do
     local mark = string.char(i)
     vim.keymap.set('n', 'm' .. mark, function()
-      local bufnr = vim.api.nvim_get_current_buf()
+      -- Store the original buffer before anything else
+      local popup = require("marko.popup")
+      local target_bufnr = vim.api.nvim_get_current_buf()
       
-      -- Hide any existing virtual mark for this global mark in all buffers
-      for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-        if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) then
-          M.hide_mark(buf, mark)
+      -- If popup is open, find the underlying buffer
+      if popup.is_open() then
+        -- Look for the most recently used normal buffer (not popup)
+        local all_bufs = vim.api.nvim_list_bufs()
+        for _, buf in ipairs(all_bufs) do
+          if vim.api.nvim_buf_is_loaded(buf) and 
+             buf ~= target_bufnr and 
+             vim.api.nvim_buf_get_option(buf, 'filetype') ~= 'marko-popup' and
+             vim.api.nvim_buf_get_option(buf, 'buftype') == '' then
+            target_bufnr = buf
+            break
+          end
         end
       end
       
-      -- Set the mark normally first
-      vim.cmd('normal! m' .. mark)
-      
-      -- Show virtual text immediately in current buffer
-      vim.defer_fn(function()
-        if vim.api.nvim_buf_is_valid(bufnr) then
-          -- Use the same approach as buffer marks
-          local pos = vim.api.nvim_buf_get_mark(bufnr, mark)
-          if pos[1] > 0 then
-            M.show_mark(bufnr, mark, pos[1], pos[2])
+      -- Set the mark using the API directly instead of normal commands
+      -- This works better from popup context
+      local cursor_pos = vim.api.nvim_win_get_cursor(0)
+      if popup.is_open() then
+        -- When popup is open, we need to get cursor position from the target buffer window
+        for _, win in ipairs(vim.api.nvim_list_wins()) do
+          if vim.api.nvim_win_get_buf(win) == target_bufnr then
+            cursor_pos = vim.api.nvim_win_get_cursor(win)
+            break
           end
         end
-      end, 10)
+      end
+      
+      -- Set the mark directly using setpos
+      vim.fn.setpos("'" .. mark, {target_bufnr, cursor_pos[1], cursor_pos[2] + 1, 0})
+      
+      -- Show virtual text immediately
+      vim.defer_fn(function()
+        if vim.api.nvim_buf_is_valid(target_bufnr) then
+          -- Hide existing virtual mark first
+          M.hide_mark(target_bufnr, mark)
+          
+          -- Show new virtual text
+          M.show_mark(target_bufnr, mark, cursor_pos[1], cursor_pos[2])
+        end
+      end, 1)  -- Same short delay as buffer marks
     end, { desc = 'Set global mark ' .. mark .. ' with virtual text' })
   end
-  
-  -- Hook into delmarks command
-  vim.api.nvim_create_user_command('Delmarks', function(opts)
-    local args = opts.args
-    
-    -- Execute the original delmarks command
-    vim.cmd('delmarks ' .. args)
-    
-    -- Remove virtual text for deleted marks
-    local bufnr = vim.api.nvim_get_current_buf()
-    
-    -- Parse which marks were deleted
-    for mark in args:gmatch('[a-zA-Z]') do
-      if mark:match('[a-z]') then
-        -- Buffer mark
-        M.hide_mark(bufnr, mark)
-      else
-        -- Global mark - remove from all buffers
-        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-          if vim.api.nvim_buf_is_loaded(buf) then
-            M.hide_mark(buf, mark)
-          end
-        end
-      end
-    end
-  end, { nargs = '+', complete = 'command' })
 end
 
 -- Setup autocommands to automatically show/hide marks

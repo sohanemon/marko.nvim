@@ -24,9 +24,28 @@ function M.setup(opts)
   config = vim.tbl_deep_extend("force", default_config, opts or {})
 end
 
+-- Get theme-aware highlight group for marks
+local function get_mark_highlight(mark)
+  -- Use the same highlight groups as the popup for consistency
+  if mark:match("[a-z]") then
+    return "MarkoBufferMark"  -- Blue for buffer marks
+  else
+    return "MarkoGlobalMark"  -- Red for global marks
+  end
+end
+
 -- Show virtual text for a mark
 function M.show_mark(bufnr, mark, line, col)
   if not config.enabled then
+    return
+  end
+  
+  -- Validate inputs
+  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  
+  if not line or line <= 0 then
     return
   end
   
@@ -35,19 +54,22 @@ function M.show_mark(bufnr, mark, line, col)
   
   -- Create virtual text
   local virt_text = config.format(mark, config.icon)
-  local mark_hl = mark:match("[a-z]") and "DiagnosticInfo" or "DiagnosticWarn"
+  local mark_hl = get_mark_highlight(mark)
   
-  local extmark_id = vim.api.nvim_buf_set_extmark(bufnr, ns_id, line - 1, 0, {
+  -- Safely set extmark with error handling
+  local success, extmark_id = pcall(vim.api.nvim_buf_set_extmark, bufnr, ns_id, line - 1, 0, {
     virt_text = {{virt_text, mark_hl}},
     virt_text_pos = config.position,
     priority = 100
   })
   
-  -- Track the virtual mark
-  if not virtual_marks[bufnr] then
-    virtual_marks[bufnr] = {}
+  if success and extmark_id then
+    -- Track the virtual mark
+    if not virtual_marks[bufnr] then
+      virtual_marks[bufnr] = {}
+    end
+    virtual_marks[bufnr][mark] = extmark_id
   end
-  virtual_marks[bufnr][mark] = extmark_id
 end
 
 -- Hide virtual text for a mark
@@ -72,6 +94,11 @@ end
 function M.refresh_buffer_marks(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   
+  -- Validate buffer
+  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+    return
+  end
+  
   -- Clear existing virtual marks
   M.hide_all_marks(bufnr)
   
@@ -79,21 +106,23 @@ function M.refresh_buffer_marks(bufnr)
     return
   end
   
-  -- Get all marks in this buffer
-  local marks_module = require("marko.marks")
-  local buffer_marks = marks_module.get_buffer_marks()
-  
-  -- Show virtual text for each mark
-  for _, mark_info in ipairs(buffer_marks) do
-    M.show_mark(bufnr, mark_info.mark, mark_info.line, mark_info.col)
+  -- Get buffer marks directly from this buffer
+  for i = string.byte('a'), string.byte('z') do
+    local mark = string.char(i)
+    local pos = vim.api.nvim_buf_get_mark(bufnr, mark)
+    if pos[1] > 0 then
+      M.show_mark(bufnr, mark, pos[1], pos[2])
+    end
   end
   
-  -- Also check for global marks in this buffer
-  local global_marks = marks_module.get_global_marks()
-  for _, mark_info in ipairs(global_marks) do
-    local current_file = vim.api.nvim_buf_get_name(bufnr)
-    if mark_info.filename == current_file then
-      M.show_mark(bufnr, mark_info.mark, mark_info.line, mark_info.col)
+  -- Get global marks - try the simplest approach
+  for i = string.byte('A'), string.byte('Z') do
+    local mark = string.char(i)
+    -- For global marks, try to get them as if they were buffer marks
+    -- If they return a valid position, they're in this buffer
+    local success, pos = pcall(vim.api.nvim_buf_get_mark, bufnr, mark)
+    if success and pos and pos[1] > 0 then
+      M.show_mark(bufnr, mark, pos[1], pos[2])
     end
   end
 end
@@ -119,6 +148,86 @@ function M.toggle()
   end
 end
 
+-- Hook into mark setting commands
+function M.setup_mark_hooks()
+  -- Override the 'm' command to trigger virtual text updates
+  for i = string.byte('a'), string.byte('z') do
+    local mark = string.char(i)
+    vim.keymap.set('n', 'm' .. mark, function()
+      local bufnr = vim.api.nvim_get_current_buf()
+      
+      -- Hide existing virtual mark first (in case we're moving it)
+      M.hide_mark(bufnr, mark)
+      
+      -- Set the mark normally
+      vim.cmd('normal! m' .. mark)
+      
+      -- Show virtual text immediately
+      vim.defer_fn(function()
+        local pos = vim.api.nvim_buf_get_mark(bufnr, mark)
+        if pos[1] > 0 then
+          M.show_mark(bufnr, mark, pos[1], pos[2])
+        end
+      end, 10)
+    end, { desc = 'Set mark ' .. mark .. ' with virtual text' })
+  end
+  
+  -- Same for global marks (A-Z)
+  for i = string.byte('A'), string.byte('Z') do
+    local mark = string.char(i)
+    vim.keymap.set('n', 'm' .. mark, function()
+      local bufnr = vim.api.nvim_get_current_buf()
+      
+      -- Hide any existing virtual mark for this global mark in all buffers
+      for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_buf_is_loaded(buf) then
+          M.hide_mark(buf, mark)
+        end
+      end
+      
+      -- Set the mark normally first
+      vim.cmd('normal! m' .. mark)
+      
+      -- Show virtual text immediately in current buffer
+      vim.defer_fn(function()
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          -- Use the same approach as buffer marks
+          local pos = vim.api.nvim_buf_get_mark(bufnr, mark)
+          if pos[1] > 0 then
+            M.show_mark(bufnr, mark, pos[1], pos[2])
+          end
+        end
+      end, 10)
+    end, { desc = 'Set global mark ' .. mark .. ' with virtual text' })
+  end
+  
+  -- Hook into delmarks command
+  vim.api.nvim_create_user_command('Delmarks', function(opts)
+    local args = opts.args
+    
+    -- Execute the original delmarks command
+    vim.cmd('delmarks ' .. args)
+    
+    -- Remove virtual text for deleted marks
+    local bufnr = vim.api.nvim_get_current_buf()
+    
+    -- Parse which marks were deleted
+    for mark in args:gmatch('[a-zA-Z]') do
+      if mark:match('[a-z]') then
+        -- Buffer mark
+        M.hide_mark(bufnr, mark)
+      else
+        -- Global mark - remove from all buffers
+        for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+          if vim.api.nvim_buf_is_loaded(buf) then
+            M.hide_mark(buf, mark)
+          end
+        end
+      end
+    end
+  end, { nargs = '+', complete = 'command' })
+end
+
 -- Setup autocommands to automatically show/hide marks
 function M.setup_autocmds()
   local group = vim.api.nvim_create_augroup("MarkoVirtualMarks", { clear = true })
@@ -126,20 +235,12 @@ function M.setup_autocmds()
   -- Refresh marks when buffer is entered
   vim.api.nvim_create_autocmd("BufEnter", {
     group = group,
-    callback = function()
-      vim.defer_fn(function()
-        M.refresh_buffer_marks()
-      end, 100)  -- Small delay to ensure marks are loaded
-    end
-  })
-  
-  -- Refresh marks when text changes (marks might be added/removed)
-  vim.api.nvim_create_autocmd("TextChanged", {
-    group = group,
-    callback = function()
-      vim.defer_fn(function()
-        M.refresh_buffer_marks()
-      end, 200)
+    callback = function(args)
+      if args.buf and vim.api.nvim_buf_is_valid(args.buf) then
+        vim.defer_fn(function()
+          M.refresh_buffer_marks(args.buf)
+        end, 50)
+      end
     end
   })
   
@@ -147,9 +248,14 @@ function M.setup_autocmds()
   vim.api.nvim_create_autocmd("BufDelete", {
     group = group,
     callback = function(args)
-      virtual_marks[args.buf] = nil
+      if virtual_marks[args.buf] then
+        virtual_marks[args.buf] = nil
+      end
     end
   })
+  
+  -- Setup mark setting hooks
+  M.setup_mark_hooks()
 end
 
 return M

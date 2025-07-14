@@ -2,7 +2,7 @@ local M = {}
 
 local default_config = {
   width = 100,
-  height = 50,
+  height = 100,
   border = "rounded",
   title = " Marks ",
   -- Default keymap to open popup (set to false to disable)

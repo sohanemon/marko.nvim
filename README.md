@@ -22,7 +22,7 @@ A modern Neovim plugin for enhanced mark management with a beautiful popup inter
   config = function()
     require('marko').setup({
       width = 100,
-      height = 30,
+      height = 100,
       border = "rounded",
       title = " Marks ",
     })
@@ -61,7 +61,7 @@ Plug 'developedbyed/marko'
    ```vim
    :Marko
    ```
-   Or use the default keymap: `<S-">`
+   Or use the default keymap: `"`
 
 3. **Navigate in the popup**:
    - `Enter` - Jump to mark
@@ -79,7 +79,7 @@ Plug 'developedbyed/marko'
 require('marko').setup({
   -- Popup window dimensions
   width = 100,
-  height = 30,
+  height = 100,
   
   -- Border style: 'rounded', 'single', 'double', 'solid', 'shadow'
   border = "rounded",
@@ -88,7 +88,7 @@ require('marko').setup({
   title = " Marks ",
   
   -- Default keymap to open popup (set to false to disable)
-  default_keymap = '<S-">',
+  default_keymap = '"',
   
   -- Key mappings within popup
   keymaps = {
@@ -112,7 +112,7 @@ require('marko').setup({
 ```lua
 -- Disable default keymap and set your own
 require('marko').setup({
-  default_keymap = false,  -- Disable default <S-">
+  default_keymap = false,  -- Disable default ""
 })
 
 -- Set custom keymap

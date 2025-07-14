@@ -150,8 +150,8 @@ function M.populate_buffer(marks)
   -- Store marks data in buffer variable for keymap access
   vim.b[popup_buf].marks_data = marks
   
-  -- Apply syntax highlighting
-  M.apply_highlighting(marks)
+  -- Apply syntax highlighting (comment out if causing issues)
+  -- M.apply_highlighting(marks)
 end
 
 -- Apply highlighting to the buffer content
@@ -171,78 +171,34 @@ function M.apply_highlighting(marks)
     return
   end
   
+  -- Simple highlighting approach to avoid range errors
   for i, mark in ipairs(marks) do
     local line_idx = i - 1
     local line_content = vim.api.nvim_buf_get_lines(popup_buf, line_idx, line_idx + 1, false)[1]
     
-    if not line_content then
+    if not line_content or #line_content == 0 then
       goto continue
     end
     
-    local line_len = #line_content
+    -- Just highlight the mark character based on type
+    local mark_hl = mark.type == "global" and "MarkoGlobalMark" or "MarkoBufferMark"
     
-    -- Use pattern matching to find and highlight different parts
-    local patterns = {
-      -- Mark type icon at start
-      { pattern = "^[" .. config.icons.buffer .. config.icons.global .. "]", hl_group = "MarkoIcon" },
-      -- Separators
-      { pattern = config.icons.separator, hl_group = "MarkoSeparator" },
-      -- Buffer marks (lowercase letters)
-      { pattern = "%s[a-z]%s", hl_group = "MarkoBufferMark" },
-      -- Global marks (uppercase letters)  
-      { pattern = "%s[A-Z]%s", hl_group = "MarkoGlobalMark" },
-      -- Line numbers
-      { pattern = "%s%d+%s", hl_group = "MarkoLineNumber" },
-      -- File and line icons
-      { pattern = "[" .. config.icons.file .. config.icons.line .. "]", hl_group = "MarkoIcon" },
-    }
-    
-    -- Apply patterns
-    for _, p in ipairs(patterns) do
-      local start_pos = 1
-      while true do
-        local match_start, match_end = line_content:find(p.pattern, start_pos)
-        if not match_start then break end
-        
-        -- Ensure we don't go out of bounds
-        match_start = math.max(1, match_start)
-        match_end = math.min(line_len, match_end)
-        
-        if match_start <= match_end and match_start <= line_len then
-          vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, match_start - 1, {
-            end_col = match_end,
-            hl_group = p.hl_group
-          })
-        end
-        
-        start_pos = match_end + 1
-        if start_pos > line_len then break end
-      end
-    end
-    
-    -- Highlight filename section for global marks
-    if mark.type == "global" then
-      local file_icon_pos = line_content:find(config.icons.file)
-      if file_icon_pos then
-        local filename_start = file_icon_pos + vim.fn.strchars(config.icons.file) + 1
-        local next_sep = line_content:find(config.icons.separator, filename_start)
-        if next_sep and filename_start < next_sep then
-          vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, filename_start - 1, {
-            end_col = math.min(next_sep - 1, line_len),
-            hl_group = "MarkoFilename"
-          })
-        end
-      end
-    end
-    
-    -- Highlight content after last separator
-    local last_sep = line_content:match(".*" .. config.icons.separator .. "()")
-    if last_sep and last_sep <= line_len then
-      vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, last_sep, {
-        end_col = -1,
-        hl_group = "MarkoContent"
+    -- Find the mark character in the line (should be the single letter)
+    local mark_pos = line_content:find("%s" .. mark.mark .. "%s")
+    if mark_pos then
+      -- Highlight just the mark character
+      vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, mark_pos, {
+        end_col = mark_pos + 1,
+        hl_group = mark_hl
       })
     end
+    
+    -- Highlight the entire line with a subtle background for cursor line effect
+    vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, 0, {
+      end_col = -1,
+      hl_group = "MarkoContent",
+      priority = 100
+    })
     
     ::continue::
   end

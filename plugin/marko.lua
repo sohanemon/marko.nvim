@@ -25,4 +25,3 @@ vim.defer_fn(function()
 		end, { desc = "Show marks popup" })
 	end
 end, 100)
-

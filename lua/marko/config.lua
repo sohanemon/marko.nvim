@@ -6,7 +6,7 @@ local default_config = {
   border = "rounded",
   title = " Marks ",
   -- Default keymap to open popup (set to false to disable)
-  default_keymap = '"',
+  default_keymap = "'",
   keymaps = {
     delete = "d",
     goto = "<CR>",
@@ -20,14 +20,8 @@ local default_config = {
   transparency = 0,  -- 0-100, window background transparency
   shadow = false,    -- Drop shadow effect
   
-  -- Icons for different mark types
-  icons = {
-    buffer = "󰓹",     -- Nerd Font buffer icon
-    global = "󰊄",     -- Nerd Font global icon
-    separator = "│",   -- Column separator
-    line = "󰘕",       -- Line number icon
-    file = "󰈔"        -- File icon
-  },
+  -- Separator character
+  separator = "│",   -- Column separator
   
   -- Column widths for better alignment
   columns = {
@@ -52,7 +46,6 @@ local default_config = {
     line_number = { fg = "#ABB2BF" },               -- Gray for line numbers
     filename = { fg = "#98C379", italic = true },   -- Green for filenames
     content = { fg = "#ABB2BF" },                   -- Gray for content
-    icon = { fg = "#C678DD" },                      -- Purple for icons
     separator = { fg = "#5C6370" }                  -- Dark gray for separators
   }
 }
@@ -74,7 +67,6 @@ local function setup_highlights()
     MarkoLineNumber = highlights.line_number,
     MarkoFilename = highlights.filename,
     MarkoContent = highlights.content,
-    MarkoIcon = highlights.icon,
     MarkoSeparator = highlights.separator
   }
   

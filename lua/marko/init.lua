@@ -12,8 +12,8 @@ function M.setup(opts)
   local config = require('marko.config').get()
   if config.default_keymap then
     vim.keymap.set('n', config.default_keymap, function()
-      M.show_marks()
-    end, { desc = 'Show marks popup' })
+      M.toggle_marks()
+    end, { desc = 'Toggle marks popup' })
   end
   
   -- Setup autocommands for theme changes
@@ -25,7 +25,17 @@ function M.setup(opts)
   })
 end
 
--- Main function to show marks popup
+-- Main function to toggle marks popup
+function M.toggle_marks()
+  local popup = require("marko.popup")
+  if popup.is_open() then
+    popup.close_popup()
+  else
+    popup.create_popup()
+  end
+end
+
+-- Main function to show marks popup (kept for compatibility)
 function M.show_marks()
   local popup = require("marko.popup")
   popup.create_popup()

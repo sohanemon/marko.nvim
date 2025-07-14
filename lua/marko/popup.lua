@@ -4,6 +4,11 @@ local popup_buf = nil
 local popup_win = nil
 local shadow_win = nil
 
+-- Check if popup is currently open
+function M.is_open()
+  return popup_win and vim.api.nvim_win_is_valid(popup_win)
+end
+
 -- Create shadow window for depth effect
 local function create_shadow(width, height, row, col)
   if not require("marko.config").get().shadow then
@@ -103,42 +108,30 @@ function M.populate_buffer(marks)
     table.insert(lines, "No marks found")
   else
     for i, mark in ipairs(marks) do
-      local icon = mark.type == "global" and config.icons.global or config.icons.buffer
       local filename = ""
       
-      if mark.type == "global" and mark.filename then
-        filename = vim.fn.fnamemodify(mark.filename, ":t")
-        -- Truncate long filenames
-        if #filename > config.columns.filename then
-          filename = filename:sub(1, config.columns.filename - 3) .. "..."
-        end
+      -- Get filename for all marks (not just global)
+      if mark.filename then
+        filename = vim.fn.fnamemodify(mark.filename, ":~:.")  -- Relative to cwd
+      elseif mark.type == "buffer" then
+        filename = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":~:.")  -- Current buffer
       end
       
-      -- Create formatted line with proper spacing
-      local line_str
-      if mark.type == "global" then
-        line_str = string.format("%s %s %s %s %4d %s %-" .. config.columns.filename .. "s %s %s", 
-          icon,
-          config.icons.separator,
-          mark.mark,
-          config.icons.line,
-          mark.line,
-          config.icons.file,
-          filename,
-          config.icons.separator,
-          mark.text:sub(1, 50)
-        )
-      else
-        line_str = string.format("%s %s %s %s %4d %s %s", 
-          icon,
-          config.icons.separator,
-          mark.mark,
-          config.icons.line,
-          mark.line,
-          config.icons.separator,
-          mark.text:sub(1, 50)
-        )
+      -- Truncate long filenames
+      if #filename > config.columns.filename then
+        filename = filename:sub(1, config.columns.filename - 3) .. "..."
       end
+      
+      -- Create formatted line with tight spacing
+      local line_str = string.format("%s%s%4d%s%s%s%s", 
+        mark.mark,
+        config.separator,
+        mark.line,
+        config.separator,
+        filename,
+        config.separator,
+        mark.text:sub(1, 50)
+      )
       
       table.insert(lines, line_str)
     end
@@ -150,8 +143,8 @@ function M.populate_buffer(marks)
   -- Store marks data in buffer variable for keymap access
   vim.b[popup_buf].marks_data = marks
   
-  -- Apply syntax highlighting (comment out if causing issues)
-  -- M.apply_highlighting(marks)
+  -- Apply syntax highlighting
+  M.apply_highlighting(marks)
 end
 
 -- Apply highlighting to the buffer content
@@ -163,15 +156,9 @@ function M.apply_highlighting(marks)
   vim.api.nvim_buf_clear_namespace(popup_buf, ns_id, 0, -1)
   
   if #marks == 0 then
-    -- Highlight "No marks found" message
-    vim.api.nvim_buf_set_extmark(popup_buf, ns_id, 0, 0, {
-      end_col = -1,
-      hl_group = "MarkoContent"
-    })
     return
   end
   
-  -- Simple highlighting approach to avoid range errors
   for i, mark in ipairs(marks) do
     local line_idx = i - 1
     local line_content = vim.api.nvim_buf_get_lines(popup_buf, line_idx, line_idx + 1, false)[1]
@@ -180,25 +167,70 @@ function M.apply_highlighting(marks)
       goto continue
     end
     
-    -- Just highlight the mark character based on type
-    local mark_hl = mark.type == "global" and "MarkoGlobalMark" or "MarkoBufferMark"
+    -- Safe pattern-based highlighting
+    local patterns = {
+      -- Mark character (single letter at start of line)
+      {
+        pattern = "^([a-zA-Z])" .. config.separator,
+        hl_group = mark.type == "global" and "MarkoGlobalMark" or "MarkoBufferMark",
+        capture = 1  -- Highlight the captured group (the letter)
+      },
+      -- Line numbers (digits)
+      {
+        pattern = "(%d+)",
+        hl_group = "MarkoLineNumber"
+      }
+    }
     
-    -- Find the mark character in the line (should be the single letter)
-    local mark_pos = line_content:find("%s" .. mark.mark .. "%s")
-    if mark_pos then
-      -- Highlight just the mark character
-      vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, mark_pos, {
-        end_col = mark_pos + 1,
-        hl_group = mark_hl
-      })
+    -- Apply each pattern
+    for _, p in ipairs(patterns) do
+      local start_pos = 1
+      while start_pos <= #line_content do
+        local match_start, match_end, capture = line_content:find(p.pattern, start_pos)
+        if not match_start then break end
+        
+        -- If we have a capture group, highlight just that
+        if p.capture and capture then
+          local capture_start = line_content:find(capture, match_start, true)
+          if capture_start then
+            vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, capture_start - 1, {
+              end_col = capture_start - 1 + #capture,
+              hl_group = p.hl_group
+            })
+          end
+        else
+          -- Highlight the entire match
+          vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, match_start - 1, {
+            end_col = match_end,
+            hl_group = p.hl_group
+          })
+        end
+        
+        start_pos = match_end + 1
+      end
     end
     
-    -- Highlight the entire line with a subtle background for cursor line effect
-    vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, 0, {
-      end_col = -1,
-      hl_group = "MarkoContent",
-      priority = 100
-    })
+    -- Highlight filename section (between second and third separator)
+    local separators = {}
+    local start_pos = 1
+    while true do
+      local sep_pos = line_content:find(config.separator, start_pos)
+      if not sep_pos then break end
+      table.insert(separators, sep_pos)
+      start_pos = sep_pos + 1
+    end
+    
+    -- Filename is between 2nd and 3rd separator
+    if #separators >= 3 then
+      local filename_start = separators[2] + 1
+      local filename_end = separators[3] - 1
+      if filename_start <= filename_end then
+        vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, filename_start - 1, {
+          end_col = filename_end,
+          hl_group = "MarkoFilename"
+        })
+      end
+    end
     
     ::continue::
   end
@@ -213,6 +245,17 @@ function M.setup_keymaps()
   vim.keymap.set("n", config.keymaps.close, function()
     M.close_popup()
   end, { buffer = popup_buf, silent = true })
+  
+  vim.keymap.set("n", "q", function()
+    M.close_popup()
+  end, { buffer = popup_buf, silent = true })
+  
+  -- Also close with the same key that opens it
+  if config.default_keymap then
+    vim.keymap.set("n", config.default_keymap, function()
+      M.close_popup()
+    end, { buffer = popup_buf, silent = true })
+  end
   
   -- Go to mark
   vim.keymap.set("n", config.keymaps.goto, function()

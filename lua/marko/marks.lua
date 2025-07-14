@@ -68,24 +68,63 @@ function M.get_global_marks()
 			local filename = ""
 			local line_text = ""
 			
-			-- Use vim's native marks command to get the filename
-			local marks_output = vim.fn.execute("marks " .. mark)
-			for line in marks_output:gmatch("[^\r\n]+") do
-				-- Look for the line containing our mark
-				if line:match("^%s*" .. mark .. "%s") then
-					-- Extract filename from marks output
-					-- Format: " A    10   15 /path/to/file"
-					local _, _, _, filepath = line:match("^%s*(%S+)%s+(%d+)%s+(%d+)%s*(.*)$")
-					if filepath and filepath ~= "" then
-						filename = filepath
-						break
+			-- Try multiple methods to get the filename
+			-- Method 1: Check getmarklist
+			local mark_list = vim.fn.getmarklist()
+			for _, mark_entry in ipairs(mark_list) do
+				if mark_entry.mark == "'" .. mark and mark_entry.file then
+					filename = mark_entry.file
+					break
+				end
+			end
+			
+			-- Method 2: Parse marks command output
+			if filename == "" then
+				local marks_output = vim.fn.execute("marks " .. mark)
+				for line in marks_output:gmatch("[^\r\n]+") do
+					if line:match("^%s*" .. mark .. "%s") then
+						-- Try to extract filename - look for anything after the numbers
+						local filepath = line:match("^%s*" .. mark .. "%s+%d+%s+%d+%s+(.+)$")
+						if filepath and filepath ~= "" and filepath ~= "-" then
+							filename = filepath
+							break
+						end
 					end
 				end
 			end
 			
-			-- Try to get line text
-			if filename ~= "" then
-				-- Check if the file is loaded in a buffer
+			-- Method 3: If mark is in current buffer, use current buffer name
+			if filename == "" then
+				local current_buf = vim.api.nvim_get_current_buf()
+				local current_marks = vim.api.nvim_buf_get_marks(current_buf, mark, mark, {})
+				if #current_marks > 0 then
+					filename = vim.api.nvim_buf_get_name(current_buf)
+				end
+			end
+			
+			-- Method 4: Last resort - check all loaded buffers for this mark
+			if filename == "" then
+				for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+					if vim.api.nvim_buf_is_loaded(buf) then
+						local buf_marks = vim.api.nvim_buf_get_marks(buf, mark, mark, {})
+						if #buf_marks > 0 and buf_marks[1][1] == pos[1] then
+							filename = vim.api.nvim_buf_get_name(buf)
+							break
+						end
+					end
+				end
+			end
+			
+			-- Try to get line text with multiple methods
+			-- Method 1: If mark is in current buffer, get text directly
+			local current_buf = vim.api.nvim_get_current_buf()
+			if filename == vim.api.nvim_buf_get_name(current_buf) then
+				local lines = vim.api.nvim_buf_get_lines(current_buf, pos[1] - 1, pos[1], false)
+				if lines and lines[1] then
+					line_text = lines[1]
+				end
+			else
+				-- Method 2: Check if the file is loaded in a buffer
 				local loaded_buf = nil
 				for _, buf in ipairs(vim.api.nvim_list_bufs()) do
 					if vim.api.nvim_buf_is_loaded(buf) and vim.api.nvim_buf_get_name(buf) == filename then
@@ -100,12 +139,26 @@ function M.get_global_marks()
 					if lines and lines[1] then
 						line_text = lines[1]
 					end
-				elseif vim.fn.filereadable(filename) == 1 then
-					-- Read from file
+				elseif filename ~= "" and vim.fn.filereadable(filename) == 1 then
+					-- Method 3: Read from file (last resort)
 					local lines = vim.fn.readfile(filename, "", pos[1])
 					if lines and #lines >= pos[1] then
 						line_text = lines[pos[1]]
 					end
+				end
+			end
+			
+			-- Fallback: if still no text, try to get it from the mark position directly
+			if line_text == "" then
+				-- Try using vim's built-in getline at the mark position
+				local success, result = pcall(function()
+					vim.cmd("normal! '" .. mark)
+					return vim.fn.getline(".")
+				end)
+				if success and result then
+					line_text = result
+					-- Return to original position
+					vim.cmd("normal! ''")
 				end
 			end
 

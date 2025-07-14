@@ -9,6 +9,7 @@ A modern Neovim plugin for enhanced mark management with a beautiful popup inter
 - 📝 **Line preview** - See the actual content at each mark
 - ⚡ **Fast navigation** - Jump to marks with Enter or click
 - 🗑️ **Easy deletion** - Delete marks with 'd' key
+- 👻 **Virtual text** - See mark indicators directly in your code
 - 🎛️ **Configurable** - Customize appearance and keybindings
 - 📱 **Responsive** - Adapts to your terminal size
 
@@ -73,6 +74,13 @@ Plug 'developedbyed/marko'
 - **Buffer marks (a-z)**: Local to the current buffer, lost when buffer is closed
 - **Global marks (A-Z)**: Persist across files and vim sessions
 
+### Virtual Text
+
+When enabled, marks are displayed as virtual text in your code:
+- Set a mark with `ma`, `mB`, etc. and see the indicator appear immediately
+- Virtual text shows both buffer marks (blue) and global marks (red)
+- Toggle virtual text on/off with `:MarkoToggleVirtual`
+
 ## ⚙️ Configuration
 
 ```lua
@@ -102,6 +110,14 @@ require('marko').setup({
   
   -- Exclude certain marks from display
   exclude_marks = { "'", "`", "^", ".", "[", "]", "<", ">" },
+  
+  -- Virtual text configuration
+  virtual_text = {
+    enabled = true,        -- Enable virtual text marks
+    icon = "●",           -- Icon to display
+    hl_group = "Comment", -- Highlight group
+    position = "eol",     -- Position: "eol" or "overlay"
+  },
 })
 ```
 
@@ -143,6 +159,7 @@ vim.cmd([[
 | Command | Description |
 |---------|-------------|
 | `:Marko` | Open the marks popup |
+| `:MarkoToggleVirtual` | Toggle virtual text marks on/off |
 
 ## 🎯 Mark Quick Reference
 

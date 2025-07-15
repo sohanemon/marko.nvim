@@ -68,4 +68,5 @@ function M.refresh_virtual_marks()
   require('marko.virtual').refresh_buffer_marks()
 end
 
+
 return M

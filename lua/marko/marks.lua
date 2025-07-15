@@ -5,16 +5,17 @@ function M.get_buffer_marks()
 	local marks = {}
 	local buf = vim.api.nvim_get_current_buf()
 
-	-- Get lowercase marks (buffer-local)
-	for i = string.byte("a"), string.byte("z") do
-		local mark = string.char(i)
-		local pos = vim.api.nvim_buf_get_mark(buf, mark)
-		if pos[1] > 0 then
-			local line = vim.api.nvim_buf_get_lines(buf, pos[1] - 1, pos[1], false)[1] or ""
+	-- Use getmarklist for buffer marks - more consistent
+	for _, data in ipairs(vim.fn.getmarklist("%")) do
+		local mark = data.mark:sub(2, 3)  -- Remove ' prefix
+		local pos = data.pos
+		
+		if mark:match("[a-z]") and pos[2] > 0 then
+			local line = vim.api.nvim_buf_get_lines(buf, pos[2] - 1, pos[2], false)[1] or ""
 			table.insert(marks, {
 				mark = mark,
-				line = pos[1],
-				col = pos[2],
+				line = pos[2],
+				col = pos[3],
 				text = line:sub(1, 50), -- Truncate long lines
 				type = "buffer",
 			})
@@ -33,16 +34,17 @@ function M.get_all_buffer_marks()
 		if vim.api.nvim_buf_is_loaded(buf) then
 			local filename = vim.api.nvim_buf_get_name(buf)
 			
-			-- Get lowercase marks (buffer-local) from this buffer
-			for i = string.byte("a"), string.byte("z") do
-				local mark = string.char(i)
-				local pos = vim.api.nvim_buf_get_mark(buf, mark)
-				if pos[1] > 0 then
-					local line = vim.api.nvim_buf_get_lines(buf, pos[1] - 1, pos[1], false)[1] or ""
+			-- Use getmarklist for buffer marks - more consistent
+			for _, data in ipairs(vim.fn.getmarklist(buf)) do
+				local mark = data.mark:sub(2, 3)  -- Remove ' prefix
+				local pos = data.pos
+				
+				if mark:match("[a-z]") and pos[2] > 0 then
+					local line = vim.api.nvim_buf_get_lines(buf, pos[2] - 1, pos[2], false)[1] or ""
 					table.insert(marks, {
 						mark = mark,
-						line = pos[1],
-						col = pos[2],
+						line = pos[2],
+						col = pos[3],
 						text = line:sub(1, 50),
 						filename = filename,
 						type = "buffer",
@@ -58,114 +60,68 @@ end
 -- Get all global marks
 function M.get_global_marks()
 	local marks = {}
-	local config = require("marko.config").get()
-
-	-- Get uppercase marks (global)
-	for i = string.byte("A"), string.byte("Z") do
-		local mark = string.char(i)
-		local pos = vim.api.nvim_get_mark(mark, {})
-		if pos[1] > 0 then
-			local filename = ""
+	
+	-- Use getmarklist for global marks - much cleaner and more reliable
+	for _, data in ipairs(vim.fn.getmarklist()) do
+		local mark = data.mark:sub(2, 3)  -- Remove ' prefix
+		local pos = data.pos
+		
+		if mark:match("[A-Z]") and pos[2] > 0 then
+			local filename = data.file or ""
 			local line_text = ""
 			
-			-- Try multiple methods to get the filename
-			-- Method 1: Check getmarklist
-			local mark_list = vim.fn.getmarklist()
-			for _, mark_entry in ipairs(mark_list) do
-				if mark_entry.mark == "'" .. mark and mark_entry.file then
-					filename = mark_entry.file
-					break
-				end
-			end
+			-- Get line text if file is loaded in a buffer
+			local loaded_buf = nil
 			
-			-- Method 2: Parse marks command output
-			if filename == "" then
-				local marks_output = vim.fn.execute("marks " .. mark)
-				for line in marks_output:gmatch("[^\r\n]+") do
-					if line:match("^%s*" .. mark .. "%s") then
-						-- Try to extract filename - look for anything after the numbers
-						local filepath = line:match("^%s*" .. mark .. "%s+%d+%s+%d+%s+(.+)$")
-						if filepath and filepath ~= "" and filepath ~= "-" then
-							filename = filepath
-							break
-						end
-					end
-				end
-			end
-			
-			-- Method 3: If mark is in current buffer, use current buffer name
-			if filename == "" then
-				local current_buf = vim.api.nvim_get_current_buf()
-				local current_marks = vim.api.nvim_buf_get_marks(current_buf, mark, mark, {})
-				if #current_marks > 0 then
-					filename = vim.api.nvim_buf_get_name(current_buf)
-				end
-			end
-			
-			-- Method 4: Last resort - check all loaded buffers for this mark
-			if filename == "" then
-				for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-					if vim.api.nvim_buf_is_loaded(buf) then
-						local buf_marks = vim.api.nvim_buf_get_marks(buf, mark, mark, {})
-						if #buf_marks > 0 and buf_marks[1][1] == pos[1] then
-							filename = vim.api.nvim_buf_get_name(buf)
-							break
-						end
-					end
-				end
-			end
-			
-			-- Try to get line text with multiple methods
-			-- Method 1: If mark is in current buffer, get text directly
-			local current_buf = vim.api.nvim_get_current_buf()
-			if filename == vim.api.nvim_buf_get_name(current_buf) then
-				local lines = vim.api.nvim_buf_get_lines(current_buf, pos[1] - 1, pos[1], false)
-				if lines and lines[1] then
-					line_text = lines[1]
-				end
-			else
-				-- Method 2: Check if the file is loaded in a buffer
-				local loaded_buf = nil
-				for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-					if vim.api.nvim_buf_is_loaded(buf) and vim.api.nvim_buf_get_name(buf) == filename then
+			-- Try multiple matching strategies for better path matching
+			for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_loaded(buf) then
+					local buf_name = vim.api.nvim_buf_get_name(buf)
+					
+					-- Strategy 1: Exact match
+					if buf_name == filename then
 						loaded_buf = buf
 						break
 					end
-				end
-				
-				if loaded_buf then
-					-- Get line from loaded buffer
-					local lines = vim.api.nvim_buf_get_lines(loaded_buf, pos[1] - 1, pos[1], false)
-					if lines and lines[1] then
-						line_text = lines[1]
+					
+					-- Strategy 2: Resolve paths and compare (handles relative vs absolute)
+					if filename ~= "" and buf_name ~= "" then
+						local resolved_filename = vim.fn.resolve(vim.fn.fnamemodify(filename, ":p"))
+						local resolved_buf_name = vim.fn.resolve(vim.fn.fnamemodify(buf_name, ":p"))
+						if resolved_filename == resolved_buf_name then
+							loaded_buf = buf
+							break
+						end
 					end
-				elseif filename ~= "" and vim.fn.filereadable(filename) == 1 then
-					-- Method 3: Read from file (last resort)
-					local lines = vim.fn.readfile(filename, "", pos[1])
-					if lines and #lines >= pos[1] then
-						line_text = lines[pos[1]]
+					
+					-- Strategy 3: Compare just the filename (last resort)
+					if filename ~= "" and buf_name ~= "" then
+						if vim.fn.fnamemodify(filename, ":t") == vim.fn.fnamemodify(buf_name, ":t") then
+							loaded_buf = buf
+							break
+						end
 					end
 				end
 			end
 			
-			-- Fallback: if still no text, try to get it from the mark position directly
-			if line_text == "" then
-				-- Try using vim's built-in getline at the mark position
-				local success, result = pcall(function()
-					vim.cmd("normal! '" .. mark)
-					return vim.fn.getline(".")
-				end)
-				if success and result then
-					line_text = result
-					-- Return to original position
-					vim.cmd("normal! ''")
+			if loaded_buf then
+				-- Get line from loaded buffer
+				local lines = vim.api.nvim_buf_get_lines(loaded_buf, pos[2] - 1, pos[2], false)
+				if lines and lines[1] then
+					line_text = lines[1]
+				end
+			elseif filename ~= "" and vim.fn.filereadable(filename) == 1 then
+				-- Read from file if not loaded - FIX: correct indexing
+				local lines = vim.fn.readfile(filename, "", pos[2])
+				if lines and #lines >= pos[2] and pos[2] > 0 then
+					line_text = lines[pos[2]]  -- This is correct: readfile returns 1-indexed array
 				end
 			end
 
 			table.insert(marks, {
 				mark = mark,
-				line = pos[1],
-				col = pos[2],
+				line = pos[2],
+				col = pos[3],
 				text = line_text:sub(1, 50),
 				filename = filename,
 				type = "global",
@@ -264,8 +220,8 @@ function M.delete_mark(mark_info)
 		local buffers = vim.api.nvim_list_bufs()
 		for _, buf in ipairs(buffers) do
 			if vim.api.nvim_buf_is_loaded(buf) and vim.api.nvim_buf_get_name(buf) == mark_info.filename then
-				-- Use vim.cmd with buffer-specific syntax instead of switching buffers
-				vim.cmd(buf .. "bufdo delmarks " .. mark)
+				-- Use nvim_buf_del_mark API to avoid buffer switching
+				vim.api.nvim_buf_del_mark(buf, mark)
 				break
 			end
 		end

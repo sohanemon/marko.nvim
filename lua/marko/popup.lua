@@ -56,9 +56,17 @@ function M.create_popup()
   vim.api.nvim_buf_set_option(popup_buf, "bufhidden", "wipe")
   vim.api.nvim_buf_set_option(popup_buf, "filetype", "marko-popup")
   
-  -- Calculate window size and position
-  local width = config.width
-  local height = math.min(config.height, #marks + 2)
+  -- Calculate window size and position with new layout
+  local width = math.max(config.width, 80)  -- Minimum width for new layout
+  
+  -- Account for header, column headers, status bar, and marks
+  local header_lines = 3  -- Empty, stats, separator (removed title line)
+  local column_header_lines = 2  -- Headers + separator
+  local status_lines = 3  -- Separator, status, empty
+  local marks_lines = math.max(#marks, 1)  -- At least 1 for "no marks"
+  local total_height = header_lines + column_header_lines + marks_lines + status_lines
+  
+  local height = math.min(config.height, total_height)
   local row = math.ceil((vim.o.lines - height) / 2)
   local col = math.ceil((vim.o.columns - width) / 2)
   
@@ -98,80 +106,184 @@ function M.create_popup()
   M.setup_keymaps()
 end
 
+-- Generate header with stats
+local function generate_header(marks)
+  local icons = require("marko.icons")
+  local buffer_count = 0
+  local global_count = 0
+  
+  for _, mark in ipairs(marks) do
+    if mark.type == "buffer" then
+      buffer_count = buffer_count + 1
+    else
+      global_count = global_count + 1
+    end
+  end
+  
+  local stats = string.format("  %d Global %s %d Buffer", 
+    global_count, icons.icons.separator, buffer_count)
+  
+  return {
+    "",  -- Empty line for spacing
+    stats,
+    string.rep("─", 80),  -- Separator line (wider for better coverage)
+  }
+end
+
+-- Generate column headers that align with mark content
+local function generate_column_headers()
+  local icons = require("marko.icons")
+  
+  -- Match the exact format from icons.format_mark_line:
+  -- mark_icon + mark + separator + line + separator + file_icon + filename + content
+  local header_line = string.format("  %s %s %4s %s %s",
+    "M",                 -- Simplified mark column
+    icons.icons.separator, -- Same separator
+    "Line",              -- Line number (4 chars wide to match mark lines)
+    icons.icons.separator, -- Same separator
+    "File"               -- Combined file and content
+  )
+  
+  return {
+    header_line,
+    string.rep("─", 80),  -- Separator line
+  }
+end
+
+-- Generate status bar with keybinding hints
+local function generate_status_bar()
+  local config = require("marko.config").get()
+  local icons = require("marko.icons")
+  
+  return {
+    string.rep("─", 60),  -- Separator line
+    string.format("  J/K ↕  D %s  Esc/' %s", 
+      icons.icons.delete,
+      icons.icons.escape),
+    ""  -- Empty line for spacing
+  }
+end
+
 -- Populate buffer with marks data
 function M.populate_buffer(marks)
   local config = require("marko.config").get()
+  local icons = require("marko.icons")
   local ns_id = require("marko.config").get_namespace()
   local lines = {}
   
+  -- Add header
+  local header_lines = generate_header(marks)
+  for _, line in ipairs(header_lines) do
+    table.insert(lines, line)
+  end
+  
+  -- Add column headers
+  local column_header_lines = generate_column_headers()
+  for _, line in ipairs(column_header_lines) do
+    table.insert(lines, line)
+  end
+  
+  -- Add marks content
   if #marks == 0 then
-    table.insert(lines, "No marks found")
+    table.insert(lines, "    No marks found")
   else
     for i, mark in ipairs(marks) do
-      local filename = ""
-      
-      -- Get filename for all marks (not just global)
-      if mark.filename then
-        filename = vim.fn.fnamemodify(mark.filename, ":~:.")  -- Relative to cwd
-      elseif mark.type == "buffer" then
-        filename = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":~:.")  -- Current buffer
-      end
-      
-      -- Truncate long filenames
-      if #filename > config.columns.filename then
-        filename = filename:sub(1, config.columns.filename - 3) .. "..."
-      end
-      
-      -- Create formatted line with tight spacing
-      local line_str = string.format("%s%s%4d%s%s%s%s", 
-        mark.mark,
-        config.separator,
-        mark.line,
-        config.separator,
-        filename,
-        config.separator,
-        mark.text:sub(1, 50)
-      )
-      
-      table.insert(lines, line_str)
+      local formatted_line = icons.format_mark_line(mark, config)
+      table.insert(lines, "  " .. formatted_line)  -- Add padding
     end
+  end
+  
+  -- Add status bar
+  local status_lines = generate_status_bar()
+  for _, line in ipairs(status_lines) do
+    table.insert(lines, line)
   end
   
   vim.api.nvim_buf_set_lines(popup_buf, 0, -1, false, lines)
   vim.api.nvim_buf_set_option(popup_buf, "modifiable", false)
   
   -- Store marks data in buffer variable for keymap access
+  -- Need to adjust indexing since we added header lines
+  local marks_start_line = #header_lines + #column_header_lines + 1
   vim.b[popup_buf].marks_data = marks
+  vim.b[popup_buf].marks_start_line = marks_start_line
   
   -- Apply syntax highlighting
-  M.apply_highlighting(marks)
+  M.apply_highlighting(marks, marks_start_line)
+  
+  -- Position cursor on first mark line (if any marks exist)
+  if #marks > 0 then
+    vim.api.nvim_win_set_cursor(popup_win, {marks_start_line, 0})
+  end
 end
 
 -- Apply highlighting to the buffer content
-function M.apply_highlighting(marks)
+function M.apply_highlighting(marks, marks_start_line)
   local config = require("marko.config").get()
   local ns_id = require("marko.config").get_namespace()
   
   -- Clear existing highlights
   vim.api.nvim_buf_clear_namespace(popup_buf, ns_id, 0, -1)
   
+  -- Highlight header sections
+  local all_lines = vim.api.nvim_buf_get_lines(popup_buf, 0, -1, false)
+  
+  -- Highlight title and stats in header
+  for i, line in ipairs(all_lines) do
+    local line_idx = i - 1
+    
+    
+    -- Highlight stats line
+    if line:match("󰝰") then  -- Stats icon
+      vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, 0, {
+        end_col = #line,
+        hl_group = "MarkoStats"
+      })
+    end
+    
+    -- Highlight separator lines
+    if line:match("^─+$") then
+      vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, 0, {
+        end_col = #line,
+        hl_group = "MarkoSeparator"
+      })
+    end
+    
+    -- Highlight column headers
+    if line:match("Mark") then
+      vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, 0, {
+        end_col = #line,
+        hl_group = "MarkoColumnHeader"
+      })
+    end
+    
+    -- Highlight status bar
+    if line:match("󰌑.*Select") then  -- Status bar line
+      vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, 0, {
+        end_col = #line,
+        hl_group = "MarkoStatusBar"
+      })
+    end
+  end
+  
   if #marks == 0 then
     return
   end
   
+  -- Highlight mark content lines
   for i, mark in ipairs(marks) do
-    local line_idx = i - 1
+    local line_idx = marks_start_line + i - 1
     local line_content = vim.api.nvim_buf_get_lines(popup_buf, line_idx, line_idx + 1, false)[1]
     
     if not line_content or #line_content == 0 then
       goto continue
     end
     
-    -- Safe pattern-based highlighting
+    -- Safe pattern-based highlighting - use actual mark.type from data structure
     local patterns = {
-      -- Mark character (single letter at start of line)
+      -- Mark character (at the start, before separator) - determine color by mark.type
       {
-        pattern = "^([a-zA-Z])" .. config.separator,
+        pattern = "^  ([a-zA-Z]) " .. vim.pesc(config.separator),
         hl_group = mark.type == "global" and "MarkoGlobalMark" or "MarkoBufferMark",
         capture = 1  -- Highlight the captured group (the letter)
       },
@@ -210,7 +322,7 @@ function M.apply_highlighting(marks)
       end
     end
     
-    -- Highlight filename section (between second and third separator)
+    -- Highlight filename section (between first and second separator now)
     local separators = {}
     local start_pos = 1
     while true do
@@ -220,15 +332,21 @@ function M.apply_highlighting(marks)
       start_pos = sep_pos + 1
     end
     
-    -- Filename is between 2nd and 3rd separator
-    if #separators >= 3 then
-      local filename_start = separators[2] + 1
-      local filename_end = separators[3] - 1
+    -- Filename is between 1st and 2nd separator (format: mark | line | file content)
+    if #separators >= 2 then
+      local filename_start = separators[1] + 1
+      local filename_end = separators[2] - 1
       if filename_start <= filename_end then
-        vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, filename_start - 1, {
-          end_col = filename_end,
-          hl_group = "MarkoFilename"
-        })
+        -- Skip the file icon and space, find where actual filename starts
+        local filename_section = line_content:sub(filename_start, filename_end)
+        local icon_end = filename_section:find(" ") or 0
+        if icon_end > 0 then
+          filename_start = filename_start + icon_end
+          vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, filename_start - 1, {
+            end_col = filename_end,
+            hl_group = "MarkoFilename"
+          })
+        end
       end
     end
     
@@ -259,27 +377,77 @@ function M.setup_keymaps()
   
   -- Go to mark
   vim.keymap.set("n", config.keymaps.goto, function()
-    local line = vim.api.nvim_win_get_cursor(0)[1]
+    local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
     local marks_data = vim.b[popup_buf].marks_data
+    local marks_start_line = vim.b[popup_buf].marks_start_line
     
-    if marks_data and marks_data[line] then
+    -- Calculate mark index based on cursor position
+    local mark_index = cursor_line - marks_start_line + 1
+    
+    if marks_data and mark_index > 0 and mark_index <= #marks_data then
       M.close_popup()
-      marks_module.goto_mark(marks_data[line])
+      marks_module.goto_mark(marks_data[mark_index])
     end
   end, { buffer = popup_buf, silent = true })
   
   -- Delete mark
   vim.keymap.set("n", config.keymaps.delete, function()
-    local line = vim.api.nvim_win_get_cursor(0)[1]
+    local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
     local marks_data = vim.b[popup_buf].marks_data
+    local marks_start_line = vim.b[popup_buf].marks_start_line
     
-    if marks_data and marks_data[line] then
-      marks_module.delete_mark(marks_data[line])
+    -- Calculate mark index based on cursor position
+    local mark_index = cursor_line - marks_start_line + 1
+    
+    if marks_data and mark_index > 0 and mark_index <= #marks_data then
+      marks_module.delete_mark(marks_data[mark_index])
       -- Refresh the popup
       vim.defer_fn(function()
         M.create_popup()
       end, 50)
     end
+  end, { buffer = popup_buf, silent = true })
+  
+  -- Restrict cursor movement to marks section only
+  local function constrain_cursor()
+    local marks_data = vim.b[popup_buf].marks_data
+    local marks_start_line = vim.b[popup_buf].marks_start_line
+    
+    if not marks_data or #marks_data == 0 then
+      return
+    end
+    
+    local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+    local marks_end_line = marks_start_line + #marks_data - 1
+    
+    -- Constrain cursor to marks section
+    if cursor_line < marks_start_line then
+      vim.api.nvim_win_set_cursor(0, {marks_start_line, 0})
+    elseif cursor_line > marks_end_line then
+      vim.api.nvim_win_set_cursor(0, {marks_end_line, 0})
+    end
+  end
+  
+  -- Override j/k movement to constrain cursor
+  vim.keymap.set("n", "j", function()
+    vim.cmd("normal! j")
+    constrain_cursor()
+  end, { buffer = popup_buf, silent = true })
+  
+  vim.keymap.set("n", "k", function()
+    vim.cmd("normal! k")
+    constrain_cursor()
+  end, { buffer = popup_buf, silent = true })
+  
+  -- Override down/up arrow keys as well
+  vim.keymap.set("n", "<Down>", function()
+    vim.cmd("normal! j")
+    constrain_cursor()
+  end, { buffer = popup_buf, silent = true })
+  
+  vim.keymap.set("n", "<Up>", function()
+    vim.cmd("normal! k")
+    constrain_cursor()
   end, { buffer = popup_buf, silent = true })
 end
 

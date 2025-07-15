@@ -1,10 +1,10 @@
 local M = {}
 
 local default_config = {
-  width = 100,
-  height = 100,
-  border = "rounded",
-  title = " Marks ",
+  width = 90,   -- Wider for new layout with icons
+  height = 25,  -- More reasonable default height
+  border = { "╭", "─", "╮", "│", "╯", "─", "╰", "│" },  -- Custom rounded border
+  title = " Marko ",
   -- Default keymap to open popup (set to false to disable)
   default_keymap = "'",
   keymaps = {
@@ -47,8 +47,14 @@ local default_config = {
     -- Window highlights
     normal = { link = "Normal" },
     border = { link = "FloatBorder" },
-    title = { link = "Title" },
+    title = { fg = "#E5C07B", bold = true },        -- Yellow/gold for title
     cursor_line = { bg = "#3E4451" },
+    
+    -- Header and structure highlights
+    stats = { fg = "#56B6C2", italic = true },      -- Cyan for stats
+    separator = { fg = "#5C6370" },                 -- Dark gray for separators
+    column_header = { fg = "#C678DD", bold = true }, -- Purple for column headers
+    status_bar = { fg = "#98C379", italic = true }, -- Green for status bar
     
     -- Content highlights
     buffer_mark = { fg = "#61AFEF", bold = true },  -- Blue for buffer marks
@@ -56,7 +62,11 @@ local default_config = {
     line_number = { fg = "#ABB2BF" },               -- Gray for line numbers
     filename = { fg = "#98C379", italic = true },   -- Green for filenames
     content = { fg = "#ABB2BF" },                   -- Gray for content
-    separator = { fg = "#5C6370" }                  -- Dark gray for separators
+    
+    -- Icon highlights
+    icon_buffer = { fg = "#61AFEF" },               -- Blue for buffer icons
+    icon_global = { fg = "#E06C75" },               -- Red for global icons
+    icon_file = { fg = "#D19A66" },                 -- Orange for file icons
   }
 }
 
@@ -68,16 +78,29 @@ local function setup_highlights()
   
   -- Define all custom highlight groups
   local hl_groups = {
+    -- Window highlights
     MarkoNormal = highlights.normal,
     MarkoBorder = highlights.border,
     MarkoTitle = highlights.title,
     MarkoCursorLine = highlights.cursor_line,
+    
+    -- Header and structure highlights
+    MarkoStats = highlights.stats,
+    MarkoSeparator = highlights.separator,
+    MarkoColumnHeader = highlights.column_header,
+    MarkoStatusBar = highlights.status_bar,
+    
+    -- Content highlights
     MarkoBufferMark = highlights.buffer_mark,
     MarkoGlobalMark = highlights.global_mark,
     MarkoLineNumber = highlights.line_number,
     MarkoFilename = highlights.filename,
     MarkoContent = highlights.content,
-    MarkoSeparator = highlights.separator
+    
+    -- Icon highlights
+    MarkoIconBuffer = highlights.icon_buffer,
+    MarkoIconGlobal = highlights.icon_global,
+    MarkoIconFile = highlights.icon_file,
   }
   
   -- Apply highlight groups

@@ -204,7 +204,7 @@ function M.populate_buffer(marks)
   
   -- Store marks data in buffer variable for keymap access
   -- Need to adjust indexing since we added header lines
-  local marks_start_line = #header_lines + #column_header_lines + 1
+  local marks_start_line = #header_lines + #column_header_lines 
   vim.b[popup_buf].marks_data = marks
   vim.b[popup_buf].marks_start_line = marks_start_line
   
@@ -213,7 +213,10 @@ function M.populate_buffer(marks)
   
   -- Position cursor on first mark line (if any marks exist)
   if #marks > 0 then
-    vim.api.nvim_win_set_cursor(popup_win, {marks_start_line, 0})
+    local cursor_line = marks_start_line + 1
+    print(string.format("DEBUG: header_lines=%d, column_header_lines=%d, marks_start_line=%d, cursor_line=%d, total_lines=%d", 
+      #header_lines, #column_header_lines, marks_start_line, cursor_line, #lines))
+    vim.api.nvim_win_set_cursor(popup_win, {cursor_line, 0})
   end
 end
 
@@ -281,18 +284,23 @@ function M.apply_highlighting(marks, marks_start_line)
     
     -- Safe pattern-based highlighting - use actual mark.type from data structure
     local patterns = {
-      -- Mark character (at the start, before separator) - determine color by mark.type
-      {
-        pattern = "^  ([a-zA-Z]) " .. vim.pesc(config.separator),
-        hl_group = mark.type == "global" and "MarkoGlobalMark" or "MarkoBufferMark",
-        capture = 1  -- Highlight the captured group (the letter)
-      },
       -- Line numbers (digits)
       {
         pattern = "(%d+)",
         hl_group = "MarkoLineNumber"
       }
     }
+    
+    -- Handle mark character highlighting separately to ensure correct type-based coloring
+    local mark_pattern = "^  ([a-zA-Z]) " .. vim.pesc(config.separator)
+    local mark_start, mark_end, captured_mark = line_content:find(mark_pattern)
+    if mark_start and captured_mark then
+      local mark_hl_group = mark.type == "global" and "MarkoGlobalMark" or "MarkoBufferMark"
+      vim.api.nvim_buf_set_extmark(popup_buf, ns_id, line_idx, 2, {
+        end_col = 3,  -- Single character
+        hl_group = mark_hl_group
+      })
+    end
     
     -- Apply each pattern
     for _, p in ipairs(patterns) do
@@ -382,9 +390,9 @@ function M.setup_keymaps()
     local marks_start_line = vim.b[popup_buf].marks_start_line
     
     -- Calculate mark index based on cursor position
-    local mark_index = cursor_line - marks_start_line + 1
+    local mark_index = cursor_line - marks_start_line
     
-    if marks_data and mark_index > 0 and mark_index <= #marks_data then
+    if marks_data and mark_index >= 1 and mark_index <= #marks_data then
       M.close_popup()
       marks_module.goto_mark(marks_data[mark_index])
     end
@@ -397,9 +405,9 @@ function M.setup_keymaps()
     local marks_start_line = vim.b[popup_buf].marks_start_line
     
     -- Calculate mark index based on cursor position
-    local mark_index = cursor_line - marks_start_line + 1
+    local mark_index = cursor_line - marks_start_line
     
-    if marks_data and mark_index > 0 and mark_index <= #marks_data then
+    if marks_data and mark_index >= 1 and mark_index <= #marks_data then
       marks_module.delete_mark(marks_data[mark_index])
       -- Refresh the popup
       vim.defer_fn(function()
@@ -418,11 +426,12 @@ function M.setup_keymaps()
     end
     
     local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
-    local marks_end_line = marks_start_line + #marks_data - 1
+    local marks_end_line = marks_start_line + #marks_data
     
-    -- Constrain cursor to marks section
-    if cursor_line < marks_start_line then
-      vim.api.nvim_win_set_cursor(0, {marks_start_line, 0})
+    -- Constrain cursor to marks section (1-indexed lines)
+    local first_mark_line = marks_start_line + 1
+    if cursor_line < first_mark_line then
+      vim.api.nvim_win_set_cursor(0, {first_mark_line, 0})
     elseif cursor_line > marks_end_line then
       vim.api.nvim_win_set_cursor(0, {marks_end_line, 0})
     end

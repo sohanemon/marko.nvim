@@ -16,7 +16,7 @@ local function create_shadow(width, height, row, col)
   end
   
   local shadow_buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_option(shadow_buf, "bufhidden", "wipe")
+  vim.bo[shadow_buf].bufhidden = "wipe"
   
   local shadow_win = vim.api.nvim_open_win(shadow_buf, false, {
     relative = "editor",
@@ -30,8 +30,8 @@ local function create_shadow(width, height, row, col)
   })
   
   -- Set shadow appearance
-  vim.api.nvim_win_set_option(shadow_win, "winhl", "Normal:Normal")
-  vim.api.nvim_win_set_option(shadow_win, "winblend", 80)
+  vim.wo[shadow_win].winhl = "Normal:Normal"
+  vim.wo[shadow_win].winblend = 80
   
   return shadow_win
 end
@@ -53,8 +53,8 @@ function M.create_popup()
   popup_buf = vim.api.nvim_create_buf(false, true)
   
   -- Set buffer options
-  vim.api.nvim_buf_set_option(popup_buf, "bufhidden", "wipe")
-  vim.api.nvim_buf_set_option(popup_buf, "filetype", "marko-popup")
+  vim.bo[popup_buf].bufhidden = "wipe"
+  vim.bo[popup_buf].filetype = "marko-popup"
   
   -- Calculate window size and position with new layout
   local width = math.max(config.width, 80)  -- Minimum width for new layout
@@ -89,15 +89,15 @@ function M.create_popup()
   
   -- Set window options with custom highlights
   local winhl = "Normal:MarkoNormal,FloatBorder:MarkoBorder,CursorLine:MarkoCursorLine"
-  vim.api.nvim_win_set_option(popup_win, "winhl", winhl)
+  vim.wo[popup_win].winhl = winhl
   
   -- Set transparency if configured
   if config.transparency > 0 then
-    vim.api.nvim_win_set_option(popup_win, "winblend", config.transparency)
+    vim.wo[popup_win].winblend = config.transparency
   end
   
   -- Enable cursor line highlighting
-  vim.api.nvim_win_set_option(popup_win, "cursorline", true)
+  vim.wo[popup_win].cursorline = true
   
   -- Populate buffer with marks
   M.populate_buffer(marks)
@@ -200,7 +200,7 @@ function M.populate_buffer(marks)
   end
   
   vim.api.nvim_buf_set_lines(popup_buf, 0, -1, false, lines)
-  vim.api.nvim_buf_set_option(popup_buf, "modifiable", false)
+  vim.bo[popup_buf].modifiable = false
   
   -- Store marks data in buffer variable for keymap access
   -- Need to adjust indexing since we added header lines
@@ -213,10 +213,7 @@ function M.populate_buffer(marks)
   
   -- Position cursor on first mark line (if any marks exist)
   if #marks > 0 then
-    local cursor_line = marks_start_line + 1
-    print(string.format("DEBUG: header_lines=%d, column_header_lines=%d, marks_start_line=%d, cursor_line=%d, total_lines=%d", 
-      #header_lines, #column_header_lines, marks_start_line, cursor_line, #lines))
-    vim.api.nvim_win_set_cursor(popup_win, {cursor_line, 0})
+    vim.api.nvim_win_set_cursor(popup_win, {marks_start_line + 1, 0})
   end
 end
 

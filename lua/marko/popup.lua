@@ -363,58 +363,52 @@ end
 function M.setup_keymaps()
   local config = require("marko.config").get()
   local marks_module = require("marko.marks")
-  
+
+  -- Helper to set single or multiple keymaps
+  local function set_keymaps(keys, func)
+    if type(keys) == "table" then
+      for _, key in ipairs(keys) do
+        vim.keymap.set("n", key, func, { buffer = popup_buf, silent = true })
+      end
+    elseif type(keys) == "string" then
+      vim.keymap.set("n", keys, func, { buffer = popup_buf, silent = true })
+    end
+  end
+
   -- Close popup
-  vim.keymap.set("n", config.keymaps.close, function()
+  set_keymaps(config.keymaps.close, function()
     M.close_popup()
-  end, { buffer = popup_buf, silent = true })
-  
+  end)
+
   vim.keymap.set("n", "q", function()
     M.close_popup()
   end, { buffer = popup_buf, silent = true })
-  
+
   -- Also close with the same key that opens it
   if config.default_keymap then
     vim.keymap.set("n", config.default_keymap, function()
       M.close_popup()
     end, { buffer = popup_buf, silent = true })
   end
-  
+
   -- Go to mark
-  if type(config.keymaps.goto) == "table" then
-    for _, key in ipairs(config.keymaps.goto) do
-      vim.keymap.set("n", key, function()
-        local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
-        local marks_data = vim.b[popup_buf].marks_data
-        local marks_start_line = vim.b[popup_buf].marks_start_line
-        
-        -- Calculate mark index based on cursor position
-        local mark_index = cursor_line - marks_start_line
-        
-        if marks_data and mark_index >= 1 and mark_index <= #marks_data then
-          M.close_popup()
-          marks_module.goto_mark(marks_data[mark_index])
-        end
-      end, { buffer = popup_buf, silent = true })
+  local goto_func = function()
+    local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+    local marks_data = vim.b[popup_buf].marks_data
+    local marks_start_line = vim.b[popup_buf].marks_start_line
+    
+    -- Calculate mark index based on cursor position
+    local mark_index = cursor_line - marks_start_line
+    
+    if marks_data and mark_index >= 1 and mark_index <= #marks_data then
+      M.close_popup()
+      marks_module.goto_mark(marks_data[mark_index])
     end
-  else
-    vim.keymap.set("n", config.keymaps.goto, function()
-      local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
-      local marks_data = vim.b[popup_buf].marks_data
-      local marks_start_line = vim.b[popup_buf].marks_start_line
-      
-      -- Calculate mark index based on cursor position
-      local mark_index = cursor_line - marks_start_line
-      
-      if marks_data and mark_index >= 1 and mark_index <= #marks_data then
-        M.close_popup()
-        marks_module.goto_mark(marks_data[mark_index])
-      end
-    end, { buffer = popup_buf, silent = true })
   end
-  
+  set_keymaps(config.keymaps.goto, goto_func)
+
   -- Delete mark
-  vim.keymap.set("n", config.keymaps.delete, function()
+  local delete_func = function()
     local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
     local marks_data = vim.b[popup_buf].marks_data
     local marks_start_line = vim.b[popup_buf].marks_start_line
@@ -429,8 +423,9 @@ function M.setup_keymaps()
         M.create_popup()
       end, 50)
     end
-  end, { buffer = popup_buf, silent = true })
-  
+  end
+  set_keymaps(config.keymaps.delete, delete_func)
+
   -- Restrict cursor movement to marks section only
   local function constrain_cursor()
     local marks_data = vim.b[popup_buf].marks_data

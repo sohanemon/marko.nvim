@@ -381,19 +381,37 @@ function M.setup_keymaps()
   end
   
   -- Go to mark
-  vim.keymap.set("n", config.keymaps.goto, function()
-    local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
-    local marks_data = vim.b[popup_buf].marks_data
-    local marks_start_line = vim.b[popup_buf].marks_start_line
-    
-    -- Calculate mark index based on cursor position
-    local mark_index = cursor_line - marks_start_line
-    
-    if marks_data and mark_index >= 1 and mark_index <= #marks_data then
-      M.close_popup()
-      marks_module.goto_mark(marks_data[mark_index])
+  if type(config.keymaps.goto) == "table" then
+    for _, key in ipairs(config.keymaps.goto) do
+      vim.keymap.set("n", key, function()
+        local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+        local marks_data = vim.b[popup_buf].marks_data
+        local marks_start_line = vim.b[popup_buf].marks_start_line
+        
+        -- Calculate mark index based on cursor position
+        local mark_index = cursor_line - marks_start_line
+        
+        if marks_data and mark_index >= 1 and mark_index <= #marks_data then
+          M.close_popup()
+          marks_module.goto_mark(marks_data[mark_index])
+        end
+      end, { buffer = popup_buf, silent = true })
     end
-  end, { buffer = popup_buf, silent = true })
+  else
+    vim.keymap.set("n", config.keymaps.goto, function()
+      local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+      local marks_data = vim.b[popup_buf].marks_data
+      local marks_start_line = vim.b[popup_buf].marks_start_line
+      
+      -- Calculate mark index based on cursor position
+      local mark_index = cursor_line - marks_start_line
+      
+      if marks_data and mark_index >= 1 and mark_index <= #marks_data then
+        M.close_popup()
+        marks_module.goto_mark(marks_data[mark_index])
+      end
+    end, { buffer = popup_buf, silent = true })
+  end
   
   -- Delete mark
   vim.keymap.set("n", config.keymaps.delete, function()

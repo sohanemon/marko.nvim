@@ -1,19 +1,24 @@
-# marko.nvim 🎯
+# marko.nvim
 
-A modern Neovim plugin for enhanced mark management with a beautiful popup interface.
+A modern Neovim plugin for enhanced mark management with a beautiful popup interface and dual navigation modes.
 
-## ✨ Features
+## Demo
 
-- 🎨 **Beautiful popup interface** - Clean, modern UI for browsing marks
-- 🎯 **Mark types support** - Buffer marks (a-z) and global marks (A-Z)
-- 📝 **Line preview** - See the actual content at each mark
-- ⚡ **Fast navigation** - Jump to marks with Enter or click
-- 🗑️ **Easy deletion** - Delete marks with 'd' key
-- 👻 **Virtual text** - See mark indicators directly in your code
-- 🎛️ **Configurable** - Customize appearance and keybindings
-- 📱 **Responsive** - Adapts to your terminal size
+https://github.com/user-attachments/assets/ed8e6942-fbd0-44d0-8f35-fcb1c9cdb6fb
 
-## 📦 Installation
+## Features
+
+- **Beautiful popup interface** with clean, modern UI for browsing marks
+- **Dual navigation modes**: Traditional popup navigation or direct mark jumping
+- **Visual mode indicators** with color-coded borders (blue for popup mode, red for direct mode)
+- **Mark type support** for both buffer marks (a-z) and global marks (A-Z)
+- **Line preview** showing the actual content at each mark location
+- **Easy mark deletion** with single key press in popup mode
+- **Virtual text indicators** showing marks directly in your code
+- **Highly configurable** appearance and keybindings
+- **Responsive design** that adapts to your terminal size
+
+## Installation
 
 ### Using [lazy.nvim](https://github.com/folke/lazy.nvim)
 
@@ -48,7 +53,7 @@ use {
 Plug 'developedbyed/marko.nvim'
 ```
 
-## 🚀 Usage
+## Usage
 
 ### Basic Usage
 
@@ -65,9 +70,26 @@ Plug 'developedbyed/marko.nvim'
    Or use the default keymap: `"`
 
 3. **Navigate in the popup**:
+   - `j/k` - Navigate marks
    - `Enter` - Jump to mark
    - `d` - Delete mark
+   - `;` - Switch to direct mode
    - `q` or `Esc` - Close popup
+
+### Direct Navigation Mode
+
+Direct mode allows instant mark jumping without cursor navigation. The popup displays with a red border to indicate direct mode is active.
+
+1. **Enable direct mode**:
+   - Press `;` in the popup, or
+   - Use command: `:MarkoDirectMode`, or 
+   - Use the configured toggle keymap
+
+2. **Navigate directly** (popup must remain open):
+   - Press any mark letter (`a`, `b`, `c`, etc.) to jump instantly to that mark
+   - `;` - Switch back to popup mode (blue border)
+   - `'` - Close popup and return to normal file navigation
+   - Note: Mark deletion is only available in popup mode
 
 ### Mark Types
 
@@ -81,7 +103,7 @@ When enabled, marks are displayed as virtual text in your code:
 - Virtual text shows both buffer marks (blue) and global marks (red)
 - Toggle virtual text on/off with `:MarkoToggleVirtual`
 
-## ⚙️ Configuration
+## Configuration
 
 ```lua
 require('marko').setup({
@@ -98,12 +120,20 @@ require('marko').setup({
   -- Default keymap to open popup (set to false to disable)
   default_keymap = '"',
   
+  -- Navigation mode: "popup" (default) or "direct" (jump directly to marks)
+  navigation_mode = "popup",
+  
   -- Key mappings within popup
   -- Can be a single key (string) or multiple keys (table of strings)
   keymaps = {
     delete = "d",
     goto = { "<CR>", "o" }, -- Example of multiple keys
     close = { "<Esc>", "q" },
+  },
+  
+  -- Direct mode configuration
+  direct_mode = {
+    mode_toggle_key = "<leader>mm", -- Key to toggle modes
   },
   
   -- Show marks from all buffers or just current buffer
@@ -122,7 +152,7 @@ require('marko').setup({
 })
 ```
 
-## 🎨 Customization
+## Customization
 
 ### Custom Keymaps
 
@@ -155,21 +185,24 @@ vim.cmd([[
 ]])
 ```
 
-## 🔧 Commands
+## Commands
 
 | Command | Description |
 |---------|-------------|
 | `:Marko` | Open the marks popup |
 | `:MarkoToggleVirtual` | Toggle virtual text marks on/off |
+| `:MarkoToggleMode` | Toggle between popup and direct navigation modes |
+| `:MarkoDirectMode` | Enable direct navigation mode |
+| `:MarkoPopupMode` | Enable popup navigation mode |
 
-## 🎯 Mark Quick Reference
+## Mark Quick Reference
 
 | Mark | Type | Scope | Persistence |
 |------|------|-------|-------------|
 | `a-z` | Buffer | Current buffer only | Lost when buffer closes |
 | `A-Z` | Global | Across all files | Saved in shada file |
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to:
 
@@ -179,21 +212,17 @@ Contributions are welcome! Please feel free to:
 4. Add tests if applicable
 5. Submit a pull request
 
-## 📚 Related
+## Related Projects
 
 - [vim-signature](https://github.com/kshenoy/vim-signature) - Mark visualization
 - [marks.nvim](https://github.com/chentoast/marks.nvim) - Alternative marks plugin
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built for the Neovim community
-- Inspired by vim's built-in marks system
+- Inspired by vim's built-in marks system  
 - Uses Neovim's modern Lua API
-
----
-
-**Made with ❤️ for Neovim users**
